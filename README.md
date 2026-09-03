@@ -40,7 +40,7 @@ and adjacent `B`/`I` runs are stitched back into phrases.
 ```
 He   decided  to   give   up    on    the   idea
 O    O        O    B-MWE  I-MWE O     O     O
-                   └──── give up ────┘
+                   └─ give up ─┘
 ```
 
 Four architectures are implemented so their behaviour can be compared directly

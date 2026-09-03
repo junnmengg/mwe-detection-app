@@ -51,8 +51,15 @@ v1.0; only the code behind them was reorganised.
   `ROBERTA_CRF_REPO_ID`; the old names are still read as a fallback.
 - The Hugging Face token is now optional, so public model repositories need no
   credentials at all.
-- The keep-awake workflow makes a plain HTTPS request instead of launching a
-  headless browser, cutting each run from minutes to seconds.
+- The keep-awake workflow now runs every four hours instead of six, visits the
+  demo in a real browser so Community Cloud registers a genuine session, clicks
+  the wake button when it finds the app already asleep, and fails the run when
+  it cannot confirm the app rendered. Community Cloud's sleep threshold is 12
+  hours, and GitHub's scheduled runs are best effort, so the previous six-hour
+  plain HTTPS request left no margin and failed silently.
+- A `keepalive` job keeps the schedule from being auto-disabled after 60 days
+  of repository inactivity. It is a separate job so the job installing
+  third-party npm packages never holds write access.
 
 ### Fixed
 

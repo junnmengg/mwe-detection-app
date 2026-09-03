@@ -80,9 +80,34 @@ in `models.py`.
 
 ## Deployment
 
-The app is hosted on Streamlit Community Cloud, which suspends apps after a
-period of inactivity. `.github/workflows/keep-awake.yml` issues an HTTPS
-request every six hours to keep the demo responsive for visitors.
+The app is hosted on Streamlit Community Cloud, which suspends an app after
+**12 hours** without traffic. `.github/workflows/keep-awake.yml` visits it
+every four hours so a visitor never lands on a cold start.
+
+Three details in that workflow are deliberate, because none of the moving
+parts is guaranteed on its own:
+
+* **A real browser, not `curl`.** Streamlit's docs say an app sleeps without
+  "traffic" but never define the word. A plain HTTPS request fetches the page
+  shell; it does not open the WebSocket that carries a real Streamlit session.
+  Puppeteer removes the ambiguity at the cost of a couple of minutes per run,
+  which is free on a public repository.
+* **Four hours against a twelve-hour threshold.** GitHub's `schedule` trigger
+  is best effort and is routinely delayed under load. Three consecutive runs
+  must be lost before the app can sleep.
+* **A keepalive job.** GitHub disables scheduled workflows after 60 days
+  without repository activity, with no warning. An empty commit every 50 days
+  resets that clock. It runs as a separate job so the job installing
+  third-party npm packages never holds write access.
+
+The script also clicks Community Cloud's "get this app back up" button when it
+finds the app already asleep, and exits non-zero if it cannot confirm the app
+rendered — turning a silent stop into a failed run and a notification.
+
+Even so, this cannot promise zero cold starts: pushing a commit redeploys the
+app, and Community Cloud recycles containers for its own reasons. For a demo
+that must never be cold, add a second, independent monitor so the two failure
+modes are not correlated.
 
 Weights are never committed. They are fetched from the Hugging Face Hub at
 first use and cached in the container's filesystem for the life of that

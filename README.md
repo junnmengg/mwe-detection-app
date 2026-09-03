@@ -226,6 +226,20 @@ app clears the cache.
 </details>
 
 <details>
+<summary>The hosted demo asks me to wake it up</summary>
+
+Streamlit Community Cloud suspends an app after 12 hours without traffic.
+`.github/workflows/keep-awake.yml` visits the demo every four hours in a real
+browser to prevent that, and clicks the wake button if it finds the app
+already asleep.
+
+It is not a guarantee: GitHub's scheduled runs are best effort, and pushing a
+commit redeploys the app anyway. If you hit a sleeping app, clicking
+"Yes, get this app back up!" works for anyone, not just the maintainer.
+
+</details>
+
+<details>
 <summary><code>Missing configuration: BERT_REPO_ID is not set</code></summary>
 
 `.streamlit/secrets.toml` is missing or incomplete. Copy
@@ -251,9 +265,12 @@ Hugging Face repository ids. On Streamlit Community Cloud, put the same keys in
 ├── docs/
 │   ├── MODEL_CARD.md           Intended use, results, limitations
 │   └── ARCHITECTURE.md         Design decisions and request flow
-└── .github/workflows/
-    ├── ci.yml                  Lint, format, test, import check
-    └── keep-awake.yml          Keeps the hosted demo from sleeping
+└── .github/
+    ├── workflows/
+    │   ├── ci.yml              Lint, format, test, import check
+    │   └── keep-awake.yml      Keeps the hosted demo from sleeping
+    └── scripts/
+        └── keep-awake.mjs      Browser visit + auto-wake for the demo
 ```
 
 ## Roadmap

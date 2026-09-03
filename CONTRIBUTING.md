@@ -37,6 +37,11 @@ pytest                  # tests, including doctests in the pure modules
 CI runs exactly these three commands on Python 3.10 and 3.12, plus a separate
 job that installs the full runtime and imports every module.
 
+Run `pytest`, not `python -m pytest`. The two are not equivalent: `python -m`
+puts the working directory on `sys.path`, so it can pass while the bare command
+CI runs fails on imports. `pythonpath = ["."]` in `pyproject.toml` makes both
+work, but verify with the command CI actually uses.
+
 ## Project layout
 
 | Module | Responsibility | Depends on |

@@ -51,7 +51,15 @@ ignore = [
 convention = "google"
 
 [tool.pytest.ini_options]
-# Only the dependency-free modules are collected for doctests; the rest need
-# PyTorch and Streamlit, which CI deliberately does not install for this job.
-testpaths = ["tests", "config.py", "text_processing.py"]
-addopts = "-q --strict-markers --doctest-modules"
+# The project uses flat modules at the repository root rather than a src/
+# package, so the root must be on sys.path for `from config import ...` to
+# resolve. Without this, a bare `pytest` fails while `python -m pytest`
+# succeeds, because only the latter puts the working directory on sys.path.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+# Doctests live in config.py and text_processing.py and are executed by
+# tests/test_doctests.py. They are deliberately NOT collected via
+# --doctest-modules: that flag also walks the test files themselves, which
+# collects each of them twice and reports every failure in duplicate.

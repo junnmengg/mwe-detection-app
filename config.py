@@ -59,6 +59,10 @@ class TestMetrics:
     completeness rather than as a headline figure.
     """
 
+    # Tells pytest not to try collecting this as a test class: the name
+    # matches its default `Test*` pattern, but it is a domain type.
+    __test__ = False
+
     accuracy: float
     precision: float
     recall: float

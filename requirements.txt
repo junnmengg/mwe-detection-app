@@ -4,14 +4,14 @@
 # requirements-lock.txt instead.
 
 # Web application
-streamlit>=1.55,<2.0
+streamlit>=1.62.0,<2.0
 
 # Modelling
-torch>=2.6,<3.0
-transformers>=5.3,<6.0
+torch>=2.13.0,<3.0
+transformers>=5.16.1,<6.0
 pytorch-crf==0.7.2          # unmaintained; API is stable, so pinned exactly
-huggingface_hub>=1.7,<2.0
-nltk>=3.9,<4.0
+huggingface_hub>=1.29.0,<2.0
+nltk>=3.10.3,<4.0
 
 # Tabular I/O
 pandas>=2.2,<3.0

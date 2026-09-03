@@ -1,0 +1,21 @@
+# Normalise line endings so a repository checked out on Windows, macOS and
+# Linux produces identical diffs. Without this, a Windows checkout read on
+# Linux reports every CRLF file as fully modified.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Binary assets: never touch, and don't try to diff them as text.
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.pth  binary
+*.pt   binary
+*.bin  binary
+*.safetensors binary
+*.xlsx binary
+
+# Keep generated and vendored files out of language statistics and diffs.
+requirements-lock.txt linguist-generated=true

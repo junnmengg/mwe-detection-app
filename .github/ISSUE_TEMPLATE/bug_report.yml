@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in the app or the library code behaves incorrectly.
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please do not paste
+        Hugging Face tokens or other credentials into this form.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Sentence Prediction page
+        2. Select RoBERTa-CRF
+        3. Enter "..."
+        4. See ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: Which model?
+      options: ["BERT", "BERT-CRF", "RoBERTa-CRF", "LSTM-CRF", "All of them", "Not model specific"]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where did this happen?
+      options: ["Hosted demo", "Local install", "Both"]
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Python version (local installs only)
+      placeholder: "3.12.4"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      description: Paste the traceback or console output. It is formatted automatically.
+      render: shell

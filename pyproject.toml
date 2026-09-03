@@ -1,0 +1,57 @@
+[project]
+name = "mwe-detection-app"
+version = "1.1.0"
+description = "Detect multi-word expressions in English text with four fine-tuned sequence-labelling models."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Wong Jun Meng" }]
+keywords = ["nlp", "multiword-expressions", "bert", "roberta", "crf", "streamlit"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/junnmengg/mwe-detection-app"
+Demo = "https://fyp-mwedetection.streamlit.app/"
+Issues = "https://github.com/junnmengg/mwe-detection-app/issues"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "D",    # docstrings
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "D203",  # conflicts with D211
+    "D213",  # conflicts with D212
+    "D107",  # constructor arguments are documented on the class docstring
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D100", "D101", "D102", "D103"]
+# app.py embeds the v1.0 sidebar stylesheet verbatim. Rewrapping it would be a
+# cosmetic change to a string this project has committed to keeping identical.
+"app.py" = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+# Only the dependency-free modules are collected for doctests; the rest need
+# PyTorch and Streamlit, which CI deliberately does not install for this job.
+testpaths = ["tests", "config.py", "text_processing.py"]
+addopts = "-q --strict-markers --doctest-modules"

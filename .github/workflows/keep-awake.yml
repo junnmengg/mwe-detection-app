@@ -1,38 +1,31 @@
-name: Keep Streamlit App Awake
+name: Keep demo awake
+
+# Streamlit Community Cloud suspends apps after a period of inactivity.
+# A plain HTTPS request is enough to reset that timer, so this workflow no
+# longer installs a headless browser: it runs in seconds instead of minutes.
 
 on:
   schedule:
-    # Runs every 6 hours automatically
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # Allows you to trigger the workflow manually
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  keep-awake:
+  ping:
+    name: Ping the hosted demo
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Install Puppeteer (Headless Browser)
-        run: npm i puppeteer
-
-      - name: Visit Streamlit App
+      - name: Request the app
         run: |
-          node -e "
-          const puppeteer = require('puppeteer');
-          (async () => {
-            const browser = await puppeteer.launch({ args:['--no-sandbox', '--disable-setuid-sandbox'] });
-            const page = await browser.newPage();
-            try {
-              console.log('Visiting the app...');
-              await page.goto('https://fyp-mwedetection.streamlit.app/', { waitUntil: 'networkidle2', timeout: 60000 });
-              console.log('Successfully visited to keep awake!');
-            } catch (err) {
-              console.error('Error visiting the app:', err);
-            } finally {
-              await browser.close();
-            }
-          })();
-          "
+          set -euo pipefail
+          status=$(curl --silent --show-error --location \
+                        --retry 3 --retry-delay 10 --max-time 90 \
+                        --output /dev/null --write-out '%{http_code}' \
+                        "${APP_URL}")
+          echo "HTTP ${status} from ${APP_URL}"
+          test "${status}" -lt 400
+        env:
+          APP_URL: https://fyp-mwedetection.streamlit.app/

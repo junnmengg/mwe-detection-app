@@ -1,0 +1,25 @@
+# Streamlit configuration. Safe to commit - contains no credentials.
+# Values here are overridden by ~/.streamlit/config.toml and by
+# STREAMLIT_* environment variables.
+
+[server]
+# Streamlit's hot-reload watcher walks every entry in sys.modules and asks each
+# one for its __path__. Transformers v5 resolves its submodules lazily, so that
+# question imports unrelated model code - torchvision-dependent vision models
+# such as ZoeDepth - and the watcher logs a ModuleNotFoundError traceback for
+# each one. The app is unaffected (Streamlit catches it), but the noise buries
+# real errors in the console.
+#
+# Disabling the watcher removes the cause rather than the symptom. The trade-off
+# is that saving a file no longer triggers an automatic rerun; press "R" in the
+# browser, or use the Rerun option in the app menu.
+#
+# To get hot reload back, set this to "auto" and install torchvision into your
+# development environment only - do not add it to requirements.txt, since the
+# application itself never imports it:
+#     pip install torchvision
+fileWatcherType = "none"
+
+[browser]
+# The demo is public; no usage statistics are collected.
+gatherUsageStats = false

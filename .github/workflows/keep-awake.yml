@@ -29,6 +29,9 @@ concurrency:
 env:
   APP_URL: https://fyp-mwedetection.streamlit.app/
   ARTIFACT_DIR: artifacts
+  # Substring of the title Streamlit renders, used as the fallback proof that
+  # the app answered when the DOM probe cannot see into the app's frame.
+  EXPECTED_TITLE: MWEs Prediction App
 
 jobs:
   ping:

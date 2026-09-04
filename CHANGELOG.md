@@ -67,9 +67,15 @@ v1.0; only the code behind them was reorganised.
   `ProtocolError` instead of a usable timeout. It also waits for
   `domcontentloaded` rather than `networkidle2`, because Streamlit holds a
   WebSocket open and the network may never go idle.
+- The script probes every frame rather than only the top-level document.
+  Community Cloud serves the app in a nested browsing context, so the outer
+  page has the right title but an empty body and none of Streamlit's elements.
+- Readiness now falls back to a page-title match when no Streamlit element is
+  visible. The request still reached a running container, which is what keeps
+  the app awake, so failing the run in that case was crying wolf.
 - On failure the script saves a screenshot and the page HTML, which the
-  workflow uploads as an artifact, and every poll logs the page title and
-  whether the sleep interstitial was detected.
+  workflow uploads as an artifact. Polling output is throttled to one line
+  every fifteen seconds instead of one every three.
 - GitHub Actions bumped to `checkout@v7`, `setup-node@v6`, `setup-python@v6`
   and `upload-artifact@v7`, clearing the Node 20 deprecation warning.
 

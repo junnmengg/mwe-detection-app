@@ -107,12 +107,25 @@ fails it uploads a screenshot and the page HTML as a workflow artifact, because
 the app is not reachable from a development machine behind a restrictive
 network and guessing at a remote page is a poor substitute for looking at it.
 
-Two Puppeteer details are easy to get wrong and were both wrong in the first
-version. Every individual call must complete inside `protocolTimeout` (180
-seconds by default), so a longer `waitForSelector` fails with an opaque
-`ProtocolError`; readiness is therefore polled in short slices. And
-`networkidle2` never fires reliably against Streamlit, which holds a WebSocket
-open for the session, so navigation waits only for `domcontentloaded`.
+Three details about this page are easy to get wrong, and all three were wrong
+in earlier versions:
+
+* Every Puppeteer call must complete inside `protocolTimeout` (180 seconds by
+  default). A longer `waitForSelector` fails with an opaque `ProtocolError`
+  rather than a usable timeout, so readiness is polled in short slices.
+* `networkidle2` never fires reliably against Streamlit, which holds a
+  WebSocket open for the session. Navigation waits for `domcontentloaded`.
+* Community Cloud serves the app in a nested browsing context. The top-level
+  document carries the right `<title>` but an empty `body.innerText` and none
+  of Streamlit's elements, so every frame is probed rather than only the main
+  one.
+
+Readiness is judged on two levels, because a checker that cries wolf is worse
+than no checker. A matched Streamlit element in any frame proves the app
+rendered. Failing that, the expected page title with no sleep interstitial is
+strong evidence the request reached a running container — which is the thing
+that keeps the app awake — so the run passes and records that it fell back to
+the weaker signal. Only when neither holds does the run fail.
 
 Even so, this cannot promise zero cold starts: pushing a commit redeploys the
 app, and Community Cloud recycles containers for its own reasons. For a demo

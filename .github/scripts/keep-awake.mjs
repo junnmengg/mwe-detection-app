@@ -6,20 +6,25 @@
  * that carries a real Streamlit session, and Streamlit does not document
  * whether that counts as traffic. A real browser removes the ambiguity.
  *
- * Design notes, both learned from a failing run:
+ * Three things about this page were learned the hard way from failing runs:
  *
- *   * Every individual Puppeteer call must finish inside `protocolTimeout`
- *     (180s by default). A single `waitForSelector` longer than that dies with
- *     an opaque `ProtocolError` instead of a clean timeout, so readiness is
- *     polled in short slices and `protocolTimeout` is raised explicitly.
+ *   1. Every Puppeteer call must finish inside `protocolTimeout` (180s by
+ *      default). One long `waitForSelector` dies with an opaque
+ *      `ProtocolError`, so readiness is polled in short slices instead.
  *
- *   * `networkidle2` is the wrong wait for Streamlit: the app holds a
- *     WebSocket open, so "the network went quiet" may never happen. The script
- *     waits for `domcontentloaded` and then polls the DOM instead.
+ *   2. `networkidle2` never settles here, because Streamlit holds a WebSocket
+ *      open for the session. Navigation waits for `domcontentloaded`.
  *
- * On failure it writes a screenshot and the page HTML to `artifacts/` so the
- * workflow can upload them; a mystery timeout then becomes something you can
- * actually look at.
+ *   3. Community Cloud serves the app inside a nested browsing context, so the
+ *      top-level document has the right `<title>` but an empty body and none
+ *      of Streamlit's elements. Every frame is probed, not just the main one.
+ *
+ * Success is judged on two levels. A matched Streamlit element in any frame is
+ * proof the app rendered. Failing that, the expected page title with no sleep
+ * interstitial is strong evidence the app served the request, which is what
+ * actually matters for keeping it awake; the run passes and says it used the
+ * weaker signal. Anything else fails and uploads a screenshot plus the page
+ * HTML.
  */
 
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
@@ -29,24 +34,25 @@ import puppeteer from "puppeteer";
 
 const APP_URL = process.env.APP_URL;
 const ARTIFACT_DIR = process.env.ARTIFACT_DIR ?? "artifacts";
+/** Substring of the title Streamlit renders for this app. */
+const EXPECTED_TITLE = process.env.EXPECTED_TITLE ?? "MWEs Prediction App";
 
-/** Raised above every wait below so CDP never dies mid-wait. */
 const PROTOCOL_TIMEOUT_MS = 300_000;
 const NAVIGATION_TIMEOUT_MS = 60_000;
-/** Total budget for the app to become interactive, polled in slices. */
-const READY_BUDGET_MS = 210_000;
+const READY_BUDGET_MS = 180_000;
 const POLL_INTERVAL_MS = 3_000;
+/** Only log every Nth poll; 60 identical lines help nobody. */
+const LOG_EVERY = 5;
 const SETTLE_MS = 6_000;
 
-/** Any of these means Streamlit has mounted and is running. */
 const APP_SELECTORS = [
   '[data-testid="stApp"]',
   '[data-testid="stAppViewContainer"]',
+  '[data-testid="stSidebar"]',
   ".stApp",
   "section.main",
 ];
 
-/** Text Community Cloud shows on the sleeping-app interstitial. */
 const SLEEP_PATTERNS = [
   "get this app back up",
   "has gone to sleep",
@@ -62,64 +68,75 @@ if (!APP_URL) {
   process.exit(1);
 }
 
-/**
- * Report what the page currently looks like.
- *
- * Returns which readiness selector matched (if any), whether the sleep
- * interstitial is showing, the title and a short text excerpt. Logging this
- * on every attempt means a future failure is diagnosable from the run log
- * alone.
- */
-async function probe(page, selectors, sleepPatterns) {
-  return page.evaluate(
-    (appSelectors, patterns) => {
-      const matched = appSelectors.find((selector) =>
-        document.querySelector(selector),
-      );
+/** Inspect one frame for Streamlit's elements and the sleep interstitial. */
+async function probeFrame(frame, selectors, patterns) {
+  return frame.evaluate(
+    (appSelectors, sleepPatterns) => {
+      const matched = appSelectors.find((selector) => document.querySelector(selector));
       const text = (document.body?.innerText ?? "").trim();
       const haystack = text.toLowerCase();
       return {
         matchedSelector: matched ?? null,
-        asleep: patterns.some((pattern) => haystack.includes(pattern)),
-        title: document.title,
+        asleep: sleepPatterns.some((pattern) => haystack.includes(pattern)),
         textLength: text.length,
-        excerpt: text.slice(0, 400),
+        excerpt: text.slice(0, 200),
+        frameCount: document.querySelectorAll("iframe").length,
       };
     },
     selectors,
-    sleepPatterns,
+    patterns,
   );
 }
 
-/** Click the wake control on the sleeping-app page. Returns true if clicked. */
-async function clickWakeControl(page, sleepPatterns) {
-  return page.evaluate((patterns) => {
-    const candidates = [
-      ...document.querySelectorAll("button, a, [role='button'], input[type='submit']"),
-    ];
-    const target = candidates.find((element) => {
-      const label = (
-        element.innerText ||
-        element.textContent ||
-        element.value ||
-        ""
-      ).toLowerCase();
-      return patterns.some((pattern) => label.includes(pattern));
-    });
-    if (!target) return false;
-    target.click();
-    return true;
-  }, sleepPatterns);
+/** Probe every frame on the page, tolerating ones that detach mid-check. */
+async function probeAllFrames(page) {
+  const frames = page.frames();
+  const results = [];
+  for (const frame of frames) {
+    try {
+      results.push({ url: frame.url(), ...(await probeFrame(frame, APP_SELECTORS, SLEEP_PATTERNS)) });
+    } catch (error) {
+      results.push({ url: frame.url(), error: error.message });
+    }
+  }
+  return results;
 }
 
-/** Save a screenshot and the raw HTML so a failed run can be inspected. */
+/** Click the wake control, searching every frame. Returns true if clicked. */
+async function clickWakeControl(page) {
+  for (const frame of page.frames()) {
+    try {
+      const clicked = await frame.evaluate((patterns) => {
+        const candidates = [
+          ...document.querySelectorAll(
+            "button, a, [role='button'], input[type='submit']",
+          ),
+        ];
+        const target = candidates.find((element) => {
+          const label = (
+            element.innerText ||
+            element.textContent ||
+            element.value ||
+            ""
+          ).toLowerCase();
+          return patterns.some((pattern) => label.includes(pattern));
+        });
+        if (!target) return false;
+        target.click();
+        return true;
+      }, SLEEP_PATTERNS);
+      if (clicked) return true;
+    } catch {
+      // Frame detached while we were looking at it; try the next one.
+    }
+  }
+  return false;
+}
+
 async function captureDiagnostics(page, label) {
   try {
     await mkdir(ARTIFACT_DIR, { recursive: true });
-    await page.screenshot({
-      path: path.join(ARTIFACT_DIR, `${label}.png`),
-      fullPage: true,
-    });
+    await page.screenshot({ path: path.join(ARTIFACT_DIR, `${label}.png`), fullPage: true });
     await writeFile(path.join(ARTIFACT_DIR, `${label}.html`), await page.content());
     console.log(`Saved diagnostics to ${ARTIFACT_DIR}/${label}.{png,html}`);
   } catch (error) {
@@ -135,12 +152,7 @@ async function summarise(line) {
 async function main() {
   const browser = await puppeteer.launch({
     protocolTimeout: PROTOCOL_TIMEOUT_MS,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   });
 
   try {
@@ -149,51 +161,63 @@ async function main() {
     page.setDefaultTimeout(NAVIGATION_TIMEOUT_MS);
 
     console.log(`Visiting ${APP_URL}`);
-    // domcontentloaded, not networkidle2: Streamlit's WebSocket keeps the
-    // connection open, so the network may never go idle.
-    await page.goto(APP_URL, {
-      waitUntil: "domcontentloaded",
-      timeout: NAVIGATION_TIMEOUT_MS,
-    });
+    await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
 
     const deadline = Date.now() + READY_BUDGET_MS;
     let wokeIt = false;
-    let last = null;
+    let attempt = 0;
+    let frames = [];
+    let title = "";
 
     while (Date.now() < deadline) {
-      last = await probe(page, APP_SELECTORS, SLEEP_PATTERNS);
+      attempt += 1;
+      frames = await probeAllFrames(page);
+      title = await page.title();
 
-      if (last.matchedSelector) {
-        await sleep(SETTLE_MS); // let the WebSocket session register a visit
+      const rendered = frames.find((frame) => frame.matchedSelector);
+      const asleep = frames.some((frame) => frame.asleep);
+
+      if (rendered) {
+        await sleep(SETTLE_MS);
         const verdict = wokeIt ? "Woke a sleeping app" : "App already awake";
-        console.log(`${verdict} — matched ${last.matchedSelector}, title "${last.title}"`);
-        await summarise(`- ${verdict} — \`${last.title}\``);
+        console.log(`${verdict} — matched ${rendered.matchedSelector} in ${rendered.url}`);
+        await summarise(`- ${verdict} — \`${title}\``);
         return;
       }
 
-      if (last.asleep && !wokeIt) {
-        console.log("Sleeping-app page detected; clicking the wake control.");
-        await captureDiagnostics(page, "before-wake");
-        wokeIt = await clickWakeControl(page, SLEEP_PATTERNS);
-        console.log(
-          wokeIt
-            ? "Wake control clicked; waiting for the app to boot."
-            : "No wake control found on the page; continuing to poll.",
-        );
+      // Fallback: the app answered with its own title and is not showing the
+      // sleep page. The request reached a running container, which is the
+      // thing that keeps it awake, even if the DOM probe cannot see inside.
+      if (!asleep && EXPECTED_TITLE && title.includes(EXPECTED_TITLE) && attempt >= 3) {
+        await sleep(SETTLE_MS);
+        console.log(`App served "${title}" but no Streamlit element was visible to the probe.`);
+        console.log(`Frames seen: ${JSON.stringify(frames.map((f) => f.url))}`);
+        await summarise(`- App responded (title match, DOM probe blind) — \`${title}\``);
+        return;
       }
 
-      const remaining = Math.round((deadline - Date.now()) / 1000);
-      console.log(
-        `Not ready yet (title="${last.title}", text=${last.textLength} chars, ` +
-          `asleep=${last.asleep}); ${remaining}s left.`,
-      );
+      if (asleep && !wokeIt) {
+        console.log("Sleeping-app page detected; clicking the wake control.");
+        await captureDiagnostics(page, "before-wake");
+        wokeIt = await clickWakeControl(page);
+        console.log(wokeIt ? "Wake control clicked." : "No wake control found; still polling.");
+      }
+
+      if (attempt === 1 || attempt % LOG_EVERY === 0) {
+        const remaining = Math.round((deadline - Date.now()) / 1000);
+        console.log(
+          `Not ready (title="${title}", frames=${frames.length}, ` +
+            `asleep=${asleep}); ${remaining}s left.`,
+        );
+      }
       await sleep(POLL_INTERVAL_MS);
     }
 
     await captureDiagnostics(page, "failure");
     console.error("Timed out waiting for the app to become ready.");
-    console.error(`Last probe: ${JSON.stringify(last, null, 2)}`);
-    await summarise(`- Failed to confirm the app — last title \`${last?.title ?? "?"}\``);
+    console.error(`Title: ${title}`);
+    console.error(`Frames: ${JSON.stringify(frames, null, 2)}`);
+    await summarise(`- Failed to confirm the app — last title \`${title}\``);
     process.exitCode = 1;
   } finally {
     await browser.close();

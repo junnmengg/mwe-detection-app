@@ -46,3 +46,6 @@ coverage.xml
 *.swp
 .DS_Store
 Thumbs.db
+
+# Diagnostics written by .github/scripts/keep-awake.mjs
+artifacts/

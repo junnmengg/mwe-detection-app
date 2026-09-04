@@ -102,7 +102,17 @@ parts is guaranteed on its own:
 
 The script also clicks Community Cloud's "get this app back up" button when it
 finds the app already asleep, and exits non-zero if it cannot confirm the app
-rendered — turning a silent stop into a failed run and a notification.
+rendered — turning a silent stop into a failed run and a notification. When it
+fails it uploads a screenshot and the page HTML as a workflow artifact, because
+the app is not reachable from a development machine behind a restrictive
+network and guessing at a remote page is a poor substitute for looking at it.
+
+Two Puppeteer details are easy to get wrong and were both wrong in the first
+version. Every individual call must complete inside `protocolTimeout` (180
+seconds by default), so a longer `waitForSelector` fails with an opaque
+`ProtocolError`; readiness is therefore polled in short slices. And
+`networkidle2` never fires reliably against Streamlit, which holds a WebSocket
+open for the session, so navigation waits only for `domcontentloaded`.
 
 Even so, this cannot promise zero cold starts: pushing a commit redeploys the
 app, and Community Cloud recycles containers for its own reasons. For a demo

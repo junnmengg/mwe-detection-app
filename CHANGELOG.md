@@ -59,7 +59,19 @@ v1.0; only the code behind them was reorganised.
   plain HTTPS request left no margin and failed silently.
 - A `keepalive` job keeps the schedule from being auto-disabled after 60 days
   of repository inactivity. It is a separate job so the job installing
-  third-party npm packages never holds write access.
+  third-party npm packages never holds write access. It runs even when the
+  visit fails, so a broken demo cannot also silence the schedule.
+- The keep-awake script polls for readiness in short slices rather than issuing
+  one long `waitForSelector`. Puppeteer caps every individual call at
+  `protocolTimeout` (180s by default), so a longer wait died with an opaque
+  `ProtocolError` instead of a usable timeout. It also waits for
+  `domcontentloaded` rather than `networkidle2`, because Streamlit holds a
+  WebSocket open and the network may never go idle.
+- On failure the script saves a screenshot and the page HTML, which the
+  workflow uploads as an artifact, and every poll logs the page title and
+  whether the sleep interstitial was detected.
+- GitHub Actions bumped to `checkout@v7`, `setup-node@v6`, `setup-python@v6`
+  and `upload-artifact@v7`, clearing the Node 20 deprecation warning.
 
 ### Fixed
 

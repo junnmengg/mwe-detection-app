@@ -11,8 +11,8 @@ name: Keep demo awake
 #     consecutive runs must be lost before the app can sleep.
 #   * GitHub disables scheduled workflows after 60 days without repository
 #     activity. The `keepalive` job below prevents that.
-#   * A run fails loudly if it cannot confirm the app is serving, so an
-#     outage arrives as a notification rather than as a silent stop.
+#   * A run fails loudly if it cannot confirm the app is serving, and uploads a
+#     screenshot plus the page HTML so the reason is visible.
 
 on:
   schedule:
@@ -28,20 +28,21 @@ concurrency:
 
 env:
   APP_URL: https://fyp-mwedetection.streamlit.app/
+  ARTIFACT_DIR: artifacts
 
 jobs:
   ping:
     name: Visit the hosted demo
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -54,10 +55,22 @@ jobs:
       - name: Visit the app, waking it if necessary
         run: node .github/scripts/keep-awake.mjs
 
+      # Only produced when the script could not confirm the app was serving.
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: keep-awake-diagnostics-${{ github.run_id }}
+          path: ${{ env.ARTIFACT_DIR }}/
+          if-no-files-found: ignore
+          retention-days: 14
+
   keepalive:
     name: Keep the schedule enabled
     needs: ping
-    if: github.event_name == 'schedule'
+    # Runs even when the ping fails: a broken demo must not also silence the
+    # schedule 60 days later.
+    if: always() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Separated from `ping` so that the job running third-party npm packages
@@ -66,7 +79,7 @@ jobs:
       contents: write
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
